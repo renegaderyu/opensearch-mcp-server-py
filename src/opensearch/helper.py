@@ -297,6 +297,105 @@ async def get_nodes_info(args: GetNodesArgs) -> json:
         return response
 
 
+async def get_query_set(args: GetQuerySetArgs) -> json:
+    """Get a specific query set by ID from the Search Relevance plugin.
+
+    Args:
+        args: GetQuerySetArgs containing the query_set_id
+
+    Returns:
+        json: Query set details
+    """
+    from .client import get_opensearch_client
+
+    async with get_opensearch_client(args) as client:
+        response = await client.plugins.search_relevance.get_query_sets(
+            query_set_id=args.query_set_id
+        )
+        return response
+
+
+async def create_query_set(args: CreateQuerySetArgs) -> json:
+    """Create a new query set with a list of queries in the Search Relevance plugin.
+
+    Args:
+        args: CreateQuerySetArgs containing name, queries (JSON string), and optional description
+
+    Returns:
+        json: Result of the creation operation with query set ID
+    """
+    import json as _json
+
+    from .client import get_opensearch_client
+
+    queries = _json.loads(args.queries) if isinstance(args.queries, str) else args.queries
+    if not isinstance(queries, list):
+        raise ValueError(
+            'queries must be a JSON array of strings or objects with queryText, e.g. ["q1", "q2"]'
+        )
+
+    query_set_queries = []
+    for q in queries:
+        if isinstance(q, str):
+            query_set_queries.append({'queryText': q})
+        elif isinstance(q, dict) and 'queryText' in q:
+            query_set_queries.append(q)
+        else:
+            query_set_queries.append({'queryText': str(q)})
+
+    body = {
+        'name': args.name,
+        'description': args.description or f'Query set: {args.name}',
+        'sampling': 'manual',
+        'querySetQueries': query_set_queries,
+    }
+
+    async with get_opensearch_client(args) as client:
+        response = await client.plugins.search_relevance.put_query_sets(body=body)
+        return response
+
+
+async def sample_query_set(args: SampleQuerySetArgs) -> json:
+    """Create a query set by sampling the top N most frequent queries from UBI data.
+
+    Args:
+        args: SampleQuerySetArgs containing name, query_set_size, and optional description
+
+    Returns:
+        json: Result of the sampling operation with the created query set ID
+    """
+    from .client import get_opensearch_client
+
+    body = {
+        'name': args.name,
+        'description': args.description or f'Query set: {args.name} ({args.sampling}, size={args.query_set_size})',
+        'sampling': args.sampling,
+        'querySetSize': args.query_set_size,
+    }
+
+    async with get_opensearch_client(args) as client:
+        response = await client.plugins.search_relevance.post_query_sets(body=body)
+        return response
+
+
+async def delete_query_set(args: DeleteQuerySetArgs) -> json:
+    """Delete a query set by ID from the Search Relevance plugin.
+
+    Args:
+        args: DeleteQuerySetArgs containing the query_set_id
+
+    Returns:
+        json: Result of the deletion operation
+    """
+    from .client import get_opensearch_client
+
+    async with get_opensearch_client(args) as client:
+        response = await client.plugins.search_relevance.delete_query_sets(
+            query_set_id=args.query_set_id
+        )
+        return response
+
+
 def convert_search_results_to_csv(search_results: dict) -> str:
     """Convert OpenSearch search results to CSV format.
     
